@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Activity } from "lucide-react";
+import { Mic, MicOff, Activity, User } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { motion, AnimatePresence } from "framer-motion";
 import { voiceService } from "@/lib/voice-service";
@@ -10,6 +10,9 @@ import VoiceSettings from "./voice-settings";
 import VoiceCommands from "./voice-commands";
 import ConversationDisplay from "./conversation-display";
 import VoiceToneCustomizer from "./voice-tone-customizer";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;
@@ -76,6 +79,7 @@ export default function VoiceInterface() {
   const [noSpeechTimeout, setNoSpeechTimeout] = useState<NodeJS.Timeout | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedPersona, setSelectedPersona] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
   const { toast } = useToast();
 
@@ -86,6 +90,17 @@ export default function VoiceInterface() {
       console.log(`${index + 1}. ${twin.name} - Expert in: ${twin.expertise.join(", ")}`);
     });
   }, []);
+
+  // Handle persona selection
+  const handlePersonaChange = (personaName: string) => {
+    setSelectedPersona(personaName);
+    conversationManager.setSelectedPersona(personaName);
+
+    toast({
+      title: "Persona Selected",
+      description: `You are now conversing with ${personaName}`,
+    });
+  };
 
   const initializeRecognition = () => {
     try {
@@ -161,6 +176,13 @@ export default function VoiceInterface() {
   const handleFinalTranscript = async (text: string) => {
     if (!text.trim()) return;
     setTranscript("");
+
+    // Check if a persona is selected
+    if (!selectedPersona) {
+      setError("Please select a persona before starting a conversation");
+      return;
+    }
+
     try {
       await conversationManager.handleUserInput(text);
       setError(null); // Clear any previous errors on successful processing
@@ -186,6 +208,12 @@ export default function VoiceInterface() {
   const toggleListening = async () => {
     if (isInitializing) return;
 
+    // Check if a persona is selected
+    if (!selectedPersona) {
+      setError("Please select a persona before starting a conversation");
+      return;
+    }
+
     setIsInitializing(true);
     setError(null);
 
@@ -200,6 +228,7 @@ export default function VoiceInterface() {
 
       if (!isListening) {
         await voiceService.initAudio();
+        await conversationManager.startConversation();
         recognitionRef.current?.start();
       } else {
         if (noSpeechTimeout) {
@@ -230,13 +259,41 @@ export default function VoiceInterface() {
 
   return (
     <div className="w-full min-h-[200px] flex flex-col gap-6 p-6">
+      {/* Persona Selection */}
+      <Card className="w-full bg-gradient-to-br from-background to-primary/5">
+        <CardHeader className="flex flex-row items-center gap-2">
+          <User className="h-5 w-5 text-primary" />
+          <h3 className="text-lg font-semibold">Select Conversation Partner</h3>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Choose who you want to talk with</Label>
+            <Select
+              value={selectedPersona || ""}
+              onValueChange={handlePersonaChange}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a persona" />
+              </SelectTrigger>
+              <SelectContent>
+                {digitalTwins.map((twin) => (
+                  <SelectItem key={twin.id} value={twin.name}>
+                    {twin.name} - {twin.expertise.join(", ")}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="flex flex-col items-center gap-4">
         <Button
           variant={isListening ? "destructive" : "default"}
           size="lg"
           className="w-full max-w-md relative bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 disabled:opacity-50"
           onClick={toggleListening}
-          disabled={isInitializing}
+          disabled={isInitializing || !selectedPersona}
         >
           <div className="relative flex items-center justify-center">
             {isInitializing ? (
@@ -294,10 +351,10 @@ export default function VoiceInterface() {
       </div>
 
       <div className="w-full space-y-4">
-        <VoiceToneCustomizer />
-        <VoiceSettings />
-        <VoiceCommands />
         <ConversationDisplay />
+        <VoiceSettings />
+        <VoiceToneCustomizer />
+        <VoiceCommands />
       </div>
     </div>
   );
