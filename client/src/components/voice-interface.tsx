@@ -13,6 +13,8 @@ import VoiceToneCustomizer from "./voice-tone-customizer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;
@@ -80,6 +82,8 @@ export default function VoiceInterface() {
   const [isInitializing, setIsInitializing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedPersona, setSelectedPersona] = useState<string | null>(null);
+  const [selectedPersonas, setSelectedPersonas] = useState<string[]>([]);
+  const [isMultiPersonaMode, setIsMultiPersonaMode] = useState(false);
   const recognitionRef = useRef<any>(null);
   const { toast } = useToast();
 
@@ -91,7 +95,45 @@ export default function VoiceInterface() {
     });
   }, []);
 
-  // Handle persona selection
+  // Handle conversation mode change
+  const handleModeChange = (enabled: boolean) => {
+    setIsMultiPersonaMode(enabled);
+    
+    // Reset selected personas when switching modes
+    if (enabled) {
+      // If switching to multi-persona mode, clear single persona selection
+      setSelectedPersona(null);
+      
+      // If we already have personas selected, keep them
+      if (selectedPersonas.length === 0 && selectedPersona) {
+        // If we had a single persona selected, add it to the multi-selection
+        setSelectedPersonas([selectedPersona]);
+      }
+      
+      // Update conversation manager
+      if (selectedPersonas.length >= 2) {
+        conversationManager.setSelectedPersonas(selectedPersonas);
+        conversationManager.setMultiPersonaMode(true);
+      }
+    } else {
+      // If switching to single-persona mode
+      if (selectedPersonas.length > 0) {
+        // Use the first selected persona as the single persona
+        setSelectedPersona(selectedPersonas[0]);
+        conversationManager.setSelectedPersona(selectedPersonas[0]);
+      }
+      conversationManager.setMultiPersonaMode(false);
+    }
+    
+    toast({
+      title: enabled ? "Multi-Persona Mode Enabled" : "Single-Persona Mode Enabled",
+      description: enabled 
+        ? "Select at least 2 personas to have a conversation between them" 
+        : "You can now have a one-on-one conversation with a persona",
+    });
+  };
+
+  // Handle single persona selection
   const handlePersonaChange = (personaName: string) => {
     setSelectedPersona(personaName);
     conversationManager.setSelectedPersona(personaName);
@@ -99,6 +141,33 @@ export default function VoiceInterface() {
     toast({
       title: "Persona Selected",
       description: `You are now conversing with ${personaName}`,
+    });
+  };
+  
+  // Handle multi-persona checkbox change
+  const handlePersonaCheckboxChange = (personaName: string, checked: boolean) => {
+    let newSelectedPersonas: string[];
+    
+    if (checked) {
+      // Add persona to selection
+      newSelectedPersonas = [...selectedPersonas, personaName];
+    } else {
+      // Remove persona from selection
+      newSelectedPersonas = selectedPersonas.filter(p => p !== personaName);
+    }
+    
+    setSelectedPersonas(newSelectedPersonas);
+    
+    // Update conversation manager if we have at least 2 personas
+    if (newSelectedPersonas.length >= 2) {
+      conversationManager.setSelectedPersonas(newSelectedPersonas);
+    }
+    
+    toast({
+      title: checked ? "Persona Added" : "Persona Removed",
+      description: checked 
+        ? `Added ${personaName} to the conversation` 
+        : `Removed ${personaName} from the conversation`,
     });
   };
 
@@ -176,9 +245,12 @@ export default function VoiceInterface() {
   const handleFinalTranscript = async (text: string) => {
     if (!text.trim()) return;
     setTranscript("");
-
-    // Check if a persona is selected
-    if (!selectedPersona) {
+    
+    // Check if personas are selected
+    if (isMultiPersonaMode && selectedPersonas.length < 2) {
+      setError("Please select at least 2 personas for a multi-persona conversation");
+      return;
+    } else if (!isMultiPersonaMode && !selectedPersona) {
       setError("Please select a persona before starting a conversation");
       return;
     }
@@ -207,9 +279,12 @@ export default function VoiceInterface() {
 
   const toggleListening = async () => {
     if (isInitializing) return;
-
-    // Check if a persona is selected
-    if (!selectedPersona) {
+    
+    // Check if personas are selected
+    if (isMultiPersonaMode && selectedPersonas.length < 2) {
+      setError("Please select at least 2 personas for a multi-persona conversation");
+      return;
+    } else if (!isMultiPersonaMode && !selectedPersona) {
       setError("Please select a persona before starting a conversation");
       return;
     }
@@ -259,31 +334,72 @@ export default function VoiceInterface() {
 
   return (
     <div className="w-full min-h-[200px] flex flex-col gap-6 p-6">
-      {/* Persona Selection */}
+      {/* Conversation Mode and Persona Selection */}
       <Card className="w-full bg-gradient-to-br from-background to-primary/5">
         <CardHeader className="flex flex-row items-center gap-2">
           <User className="h-5 w-5 text-primary" />
-          <h3 className="text-lg font-semibold">Select Conversation Partner</h3>
+          <h3 className="text-lg font-semibold">Conversation Setup</h3>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Choose who you want to talk with</Label>
-            <Select
-              value={selectedPersona || ""}
-              onValueChange={handlePersonaChange}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a persona" />
-              </SelectTrigger>
-              <SelectContent>
-                {digitalTwins.map((twin) => (
-                  <SelectItem key={twin.id} value={twin.name}>
-                    {twin.name} - {twin.expertise.join(", ")}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* Conversation Mode Toggle */}
+          <div className="flex items-center justify-between">
+            <Label htmlFor="multi-persona-mode">Conversation Mode</Label>
+            <div className="flex items-center space-x-2">
+              <Label htmlFor="multi-persona-mode" className={!isMultiPersonaMode ? "font-bold" : ""}>Talk with me</Label>
+              <Switch 
+                id="multi-persona-mode" 
+                checked={isMultiPersonaMode}
+                onCheckedChange={handleModeChange}
+              />
+              <Label htmlFor="multi-persona-mode" className={isMultiPersonaMode ? "font-bold" : ""}>Let them talk</Label>
+            </div>
           </div>
+
+          {/* Single Persona Selection (when in single-persona mode) */}
+          {!isMultiPersonaMode && (
+            <div className="space-y-2">
+              <Label>Choose who you want to talk with</Label>
+              <Select
+                value={selectedPersona || ""}
+                onValueChange={handlePersonaChange}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a persona" />
+                </SelectTrigger>
+                <SelectContent>
+                  {digitalTwins.map((twin) => (
+                    <SelectItem key={twin.id} value={twin.name}>
+                      {twin.name} - {twin.expertise.join(", ")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Multiple Persona Selection (when in multi-persona mode) */}
+          {isMultiPersonaMode && (
+            <div className="space-y-2">
+              <Label>Select personas for the conversation</Label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {digitalTwins.map((twin) => (
+                  <div key={twin.id} className="flex items-center space-x-2">
+                    <Checkbox 
+                      id={twin.id} 
+                      checked={selectedPersonas.includes(twin.name)}
+                      onCheckedChange={(checked) => handlePersonaCheckboxChange(twin.name, checked === true)}
+                    />
+                    <Label htmlFor={twin.id} className="cursor-pointer">
+                      {twin.name}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+              {selectedPersonas.length < 2 && isMultiPersonaMode && (
+                <p className="text-sm text-destructive">Please select at least 2 personas</p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -293,7 +409,7 @@ export default function VoiceInterface() {
           size="lg"
           className="w-full max-w-md relative bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 disabled:opacity-50"
           onClick={toggleListening}
-          disabled={isInitializing || !selectedPersona}
+          disabled={isInitializing || (isMultiPersonaMode ? selectedPersonas.length < 2 : !selectedPersona)}
         >
           <div className="relative flex items-center justify-center">
             {isInitializing ? (

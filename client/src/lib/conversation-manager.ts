@@ -28,7 +28,11 @@ export class ConversationManager {
   private openai: OpenAI;
   private isInitialized: boolean = false;
   private selectedPersona: string | null = null;
+  private selectedPersonas: string[] = [];
   private isSpeaking: boolean = false;
+  private isMultiPersonaMode: boolean = false;
+  private responseQueue: { text: string, persona: string }[] = [];
+  private isProcessingQueue: boolean = false;
 
   constructor() {
     const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
@@ -45,9 +49,11 @@ export class ConversationManager {
     });
   }
 
-  // Method to set the selected persona
+  // Method to set the selected persona for single-persona mode
   setSelectedPersona(persona: string): void {
+    this.isMultiPersonaMode = false;
     this.selectedPersona = persona;
+    this.selectedPersonas = [persona];
     this.context.activePersonas = [persona];
     console.log(`Selected persona: ${persona}`);
 
@@ -59,9 +65,48 @@ export class ConversationManager {
     }
   }
 
-  // Get the currently selected persona
-  getSelectedPersona(): string | null {
-    return this.selectedPersona;
+  // Method to set multiple personas for multi-persona mode
+  setSelectedPersonas(personas: string[]): void {
+    if (personas.length < 2) {
+      console.error('At least 2 personas must be selected for multi-persona mode');
+      return;
+    }
+
+    this.isMultiPersonaMode = true;
+    this.selectedPersona = null;
+    this.selectedPersonas = [...personas];
+    this.context.activePersonas = [...personas];
+    console.log(`Selected personas: ${personas.join(', ')}`);
+
+    // Reset conversation if it was already initialized
+    if (this.isInitialized) {
+      this.isInitialized = false;
+      this.context.messages = [];
+      this.context.turnCount = 0;
+    }
+  }
+
+  // Toggle between single and multi-persona modes
+  setMultiPersonaMode(enabled: boolean): void {
+    this.isMultiPersonaMode = enabled;
+    console.log(`Multi-persona mode: ${enabled ? 'enabled' : 'disabled'}`);
+
+    // Reset conversation if it was already initialized
+    if (this.isInitialized) {
+      this.isInitialized = false;
+      this.context.messages = [];
+      this.context.turnCount = 0;
+    }
+  }
+
+  // Get the currently selected persona(s)
+  getSelectedPersonas(): string[] {
+    return this.selectedPersonas;
+  }
+
+  // Check if in multi-persona mode
+  isInMultiPersonaMode(): boolean {
+    return this.isMultiPersonaMode;
   }
 
   async startConversation(): Promise<void> {
@@ -70,27 +115,35 @@ export class ConversationManager {
       return;
     }
 
-    // Check if a persona is selected
-    if (!this.selectedPersona) {
-      console.error('No persona selected');
-      throw new Error('Please select a persona before starting a conversation');
+    // Check if personas are selected
+    if (this.selectedPersonas.length === 0) {
+      console.error('No personas selected');
+      throw new Error('Please select at least one persona before starting a conversation');
     }
 
     try {
-      console.log(`Initializing conversation with ${this.selectedPersona}`);
+      console.log(`Initializing conversation with ${this.selectedPersonas.join(', ')}`);
 
-      // Create a system message for a conversation with the selected persona
-      const systemMessage: Message = {
-        role: "system",
-        content: `You are ${this.selectedPersona}, having a one-on-one conversation with the user about innovation, creativity, and design thinking.
-        Respond as ${this.selectedPersona} would, with their unique perspective, knowledge, and personality.
-        
-        Keep your responses concise (1-3 sentences) to maintain a natural conversational flow.
-        
-        ${this.getPersonaInstructions(this.selectedPersona)}`
-      };
+      let systemMessage: Message;
 
-      const initialPrompt = `Hello ${this.selectedPersona}, I'd like to discuss innovation and creativity with you.`;
+      if (this.isMultiPersonaMode) {
+        // Create a system message for a conversation between multiple personas
+        systemMessage = {
+          role: "system",
+          content: this.createMultiPersonaSystemPrompt()
+        };
+      } else {
+        // Create a system message for a conversation with a single persona
+        systemMessage = {
+          role: "system",
+          content: `You are ${this.selectedPersonas[0]}, having a one-on-one conversation with the user about innovation, creativity, and design thinking.
+          Respond as ${this.selectedPersonas[0]} would, with their unique perspective, knowledge, and personality.
+          
+          Keep your responses concise (1-3 sentences) to maintain a natural conversational flow.
+          
+          ${this.getPersonaInstructions(this.selectedPersonas[0])}`
+        };
+      }
 
       this.context.messages = [systemMessage];
       this.context.topic = "innovation, creativity, and design thinking";
@@ -103,15 +156,38 @@ export class ConversationManager {
         console.warn('Failed to initialize audio, continuing without audio initialization:', error);
       }
 
-      // Don't automatically start the conversation, wait for user input
+      // If in multi-persona mode, automatically start the conversation
+      if (this.isMultiPersonaMode && this.selectedPersonas.length >= 2) {
+        console.log('Auto-starting multi-persona conversation');
+        const initialPrompt = "Let's have an interesting discussion about innovation, creativity, and the future of technology.";
+        await this.handleUserInput(initialPrompt);
+      }
+      // Otherwise, wait for user input in single-persona mode
     } catch (error) {
       console.error('Failed to start conversation:', error);
       this.isInitialized = false;
-
-      // Don't rethrow the error, just log it and continue
-      // This prevents the application from crashing if conversation fails to start
       console.log('Conversation initialization failed, but application will continue');
     }
+  }
+
+  // Create a system prompt for multi-persona conversation
+  private createMultiPersonaSystemPrompt(): string {
+    const personasList = this.selectedPersonas.join(', ');
+    const personaInstructions = this.selectedPersonas.map(p => this.getPersonaInstructions(p)).join('\n\n');
+
+    return `You are facilitating a conversation between ${personasList} about innovation, creativity, and design thinking.
+    
+    For each response, you should:
+    1. Choose ONE persona to speak next
+    2. Format your response as: "PERSONA_NAME: [their response]"
+    3. Make sure each persona speaks in their authentic voice and perspective
+    4. Allow each persona to fully express their thoughts and ideas
+    5. Ensure a natural back-and-forth between the personas
+    
+    The user will provide topics or questions to guide the conversation.
+    
+    Persona instructions:
+    ${personaInstructions}`;
   }
 
   // Helper method to get persona-specific instructions
@@ -151,6 +227,13 @@ export class ConversationManager {
         - Reference your animation innovations and theme park concepts
         - Focus on creating magical experiences and emotional connections
         - Share your philosophy on entertainment and creativity`;
+
+      case "Emad Mostaque":
+        return `As Emad Mostaque:
+        - Discuss the transformative potential of AI
+        - Reference your work with Stability AI and diffusion models
+        - Emphasize democratizing access to powerful technologies
+        - Share your vision for how AI will reshape society and creativity`;
 
       default:
         return `Embody the unique perspective, knowledge, and personality of ${persona}.`;
@@ -206,7 +289,7 @@ export class ConversationManager {
                 model: "gpt-4o",
                 messages: this.context.messages,
                 temperature: 0.85,
-                max_tokens: 120,
+                max_tokens: this.isMultiPersonaMode ? 2000 : 120, // Significantly increased token limit for multi-persona mode
                 presence_penalty: 0.7,
                 frequency_penalty: 0.5
               })
@@ -249,7 +332,7 @@ export class ConversationManager {
                   model: "gpt-3.5-turbo",
                   messages: this.context.messages,
                   temperature: 0.85,
-                  max_tokens: 120,
+                  max_tokens: this.isMultiPersonaMode ? 2000 : 120, // Significantly increased token limit for multi-persona mode
                   presence_penalty: 0.7,
                   frequency_penalty: 0.5
                 })
@@ -280,7 +363,7 @@ export class ConversationManager {
               model: "gpt-3.5-turbo",
               messages: this.context.messages,
               temperature: 0.85,
-              max_tokens: 120,
+              max_tokens: this.isMultiPersonaMode ? 2000 : 120, // Significantly increased token limit for multi-persona mode
               presence_penalty: 0.7,
               frequency_penalty: 0.5
             });
@@ -297,34 +380,37 @@ export class ConversationManager {
           }
         }
 
-        // Use the selected persona as the speaker
-        const currentSpeaker = this.selectedPersona || "Assistant";
-        console.log('Speaking as:', currentSpeaker);
+        if (this.isMultiPersonaMode) {
+          // Process multi-persona response
+          await this.processMultiPersonaResponse(aiResponse);
+        } else {
+          // Process single-persona response
+          const currentSpeaker = this.selectedPersonas[0] || "Assistant";
+          console.log('Speaking as:', currentSpeaker);
 
-        this.context.messages.push({
-          role: "assistant",
-          content: aiResponse,
-          persona: currentSpeaker
-        });
+          this.context.messages.push({
+            role: "assistant",
+            content: aiResponse,
+            persona: currentSpeaker
+          });
 
-        this.context.lastResponse = aiResponse;
+          this.context.lastResponse = aiResponse;
+          this.isSpeaking = true;
 
-        this.isSpeaking = true;
-
-        // Try to speak the response, but don't block the conversation if it fails
-        try {
-          await this.speak(aiResponse, currentSpeaker);
-        } catch (speakError) {
-          console.error('Error in speech synthesis, continuing without speech:', speakError);
-        } finally {
-          this.isSpeaking = false;
+          try {
+            await this.speak(aiResponse, currentSpeaker);
+          } catch (speakError) {
+            console.error('Error in speech synthesis, continuing without speech:', speakError);
+          } finally {
+            this.isSpeaking = false;
+          }
         }
       } catch (aiError: any) {
         console.error('Error getting AI response:', aiError);
 
         // Create a fallback response
         const fallbackResponse = "I'm having trouble connecting to the AI service. Let's continue our conversation. What would you like to discuss?";
-        const fallbackSpeaker = this.selectedPersona || "Assistant";
+        const fallbackSpeaker = this.selectedPersonas[0] || "Assistant";
 
         this.context.messages.push({
           role: "assistant",
@@ -340,7 +426,6 @@ export class ConversationManager {
         } catch (speakError) {
           console.error('Error in fallback speech synthesis:', speakError);
         } finally {
-          // Reset speaking flag when done
           this.isSpeaking = false;
         }
       }
@@ -357,10 +442,125 @@ export class ConversationManager {
       } catch (speakError) {
         console.error('Error speaking error message:', speakError);
       } finally {
-        // Reset speaking flag when done
         this.isSpeaking = false;
       }
       console.log('Conversation error handled, application will continue');
+    }
+  }
+
+  // Process a multi-persona response by parsing it and adding to the queue
+  private async processMultiPersonaResponse(response: string): Promise<void> {
+    console.log('Processing multi-persona response:', response);
+    
+    // Clear the existing queue
+    this.responseQueue = [];
+    
+    // Parse the response to extract persona-specific responses
+    const lines = response.split('\n');
+    let currentPersona: string | null = null;
+    let currentText = '';
+    
+    for (const line of lines) {
+      // Check if this line starts a new persona's response
+      const personaMatch = line.match(/^([A-Za-z\s\.]+):/);
+      
+      if (personaMatch) {
+        // If we were already building a response, add it to the queue
+        if (currentPersona && currentText.trim()) {
+          this.responseQueue.push({
+            persona: currentPersona,
+            text: currentText.trim()
+          });
+        }
+        
+        // Start a new response
+        currentPersona = this.findMatchingPersona(personaMatch[1].trim());
+        currentText = line.substring(personaMatch[0].length).trim();
+      } else if (currentPersona) {
+        // Continue building the current response
+        currentText += ' ' + line.trim();
+      }
+    }
+    
+    // Add the final response to the queue
+    if (currentPersona && currentText.trim()) {
+      this.responseQueue.push({
+        persona: currentPersona,
+        text: currentText.trim()
+      });
+    }
+    
+    // If no valid responses were parsed, create a fallback
+    if (this.responseQueue.length === 0) {
+      console.warn('Failed to parse multi-persona response, using fallback');
+      
+      // Use the first selected persona as fallback
+      const fallbackPersona = this.selectedPersonas[0];
+      this.responseQueue.push({
+        persona: fallbackPersona,
+        text: response
+      });
+    }
+    
+    // Add all responses to the conversation context
+    const fullResponse = this.responseQueue.map(r => `${r.persona}: ${r.text}`).join('\n\n');
+    this.context.messages.push({
+      role: "assistant",
+      content: fullResponse
+    });
+    
+    this.context.lastResponse = fullResponse;
+    
+    // Process the queue
+    await this.processResponseQueue();
+  }
+  
+  // Find the matching persona name from the available personas
+  private findMatchingPersona(name: string): string {
+    // Try to find an exact match
+    const exactMatch = this.selectedPersonas.find(p => 
+      p.toLowerCase() === name.toLowerCase()
+    );
+    
+    if (exactMatch) return exactMatch;
+    
+    // Try to find a partial match
+    const partialMatch = this.selectedPersonas.find(p => 
+      name.toLowerCase().includes(p.toLowerCase()) || 
+      p.toLowerCase().includes(name.toLowerCase())
+    );
+    
+    if (partialMatch) return partialMatch;
+    
+    // If no match found, return the name as is
+    return name;
+  }
+  
+  // Process the response queue sequentially
+  private async processResponseQueue(): Promise<void> {
+    if (this.isProcessingQueue || this.responseQueue.length === 0) {
+      return;
+    }
+    
+    this.isProcessingQueue = true;
+    this.isSpeaking = true;
+    
+    try {
+      for (const response of this.responseQueue) {
+        console.log(`Speaking as ${response.persona}: "${response.text.substring(0, 30)}..."`);
+        
+        try {
+          await this.speak(response.text, response.persona);
+          // Add a small pause between speakers
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (error) {
+          console.error(`Error speaking as ${response.persona}:`, error);
+        }
+      }
+    } finally {
+      this.isProcessingQueue = false;
+      this.isSpeaking = false;
+      this.responseQueue = [];
     }
   }
 
@@ -370,20 +570,11 @@ export class ConversationManager {
     try {
       console.log(`Attempting to speak as ${persona || 'default'}: "${text.substring(0, 30)}..."`);
 
-      const timeoutPromise = new Promise<void>((_, reject) => {
-        setTimeout(() => {
-          reject(new Error('Speech synthesis timed out'));
-        }, 10000); // 10 second timeout
+      // No timeout - let the speech synthesis run until completion
+      await voiceService.synthesizeSpeech({
+        text,
+        persona
       });
-
-      // Try to synthesize speech with a timeout
-      await Promise.race([
-        voiceService.synthesizeSpeech({
-          text,
-          persona
-        }),
-        timeoutPromise
-      ]);
     } catch (error) {
       console.error('Error in speech synthesis:', error);
       console.log('Speech synthesis failed, continuing without speech');
@@ -404,9 +595,17 @@ export class ConversationManager {
         throw new Error("No conversation to save");
       }
 
+      const participants = this.isMultiPersonaMode 
+        ? this.selectedPersonas 
+        : [this.selectedPersonas[0] || 'AI Assistant'];
+
+      const title = this.isMultiPersonaMode
+        ? `Dialogue between ${participants.join(', ')}`
+        : `Dialogue with ${participants[0]}`;
+
       const conversation = {
-        title: `Dialogue with ${this.selectedPersona || 'AI Assistant'}`,
-        participants: this.context.activePersonas || [],
+        title,
+        participants,
         topic: this.context.topic || "Innovation and Creativity",
         transcript: transcript
       };

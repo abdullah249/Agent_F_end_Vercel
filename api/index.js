@@ -3,6 +3,8 @@ import fetch from 'node-fetch';
 
 const app = express();
 const API_BASE_URL = 'http://ec2-13-60-196-19.eu-north-1.compute.amazonaws.com:3000/api';
+//const API_BASE_URL = 'http://localhost:3000/api';
+
 const OPENAI_API_URL = 'https://api.openai.com/v1';
 
 // Parse JSON request body
