@@ -22,6 +22,8 @@ export class VoiceService {
     style: 0.5,
     speakerBoost: true
   };
+  private currentAudio: HTMLAudioElement | null = null;
+  private isSpeaking: boolean = false;
 
   async initAudio(): Promise<void> {
     try {
@@ -48,6 +50,9 @@ export class VoiceService {
     try {
       console.log(`Attempting to speak: "${text.substring(0, 30)}..." as ${persona || 'default'}`);
       
+      // Set speaking state
+      this.isSpeaking = true;
+
       // Try server-side synthesis first
       try {
         console.log('Attempting server-side speech synthesis');
@@ -81,16 +86,23 @@ export class VoiceService {
 
         const audioUrl = URL.createObjectURL(blob);
         const audio = new Audio(audioUrl);
+        
+        // Store reference to current audio
+        this.currentAudio = audio;
 
         return new Promise((resolve, reject) => {
           audio.onended = () => {
             URL.revokeObjectURL(audioUrl);
+            this.currentAudio = null;
+            this.isSpeaking = false;
             resolve();
           };
 
           audio.onerror = (err) => {
             console.error('Audio playback error:', err);
             URL.revokeObjectURL(audioUrl);
+            this.currentAudio = null;
+            this.isSpeaking = false;
             // Try browser speech as fallback
             this.useBrowserSpeech(text, persona)
               .then(resolve)
@@ -99,11 +111,13 @@ export class VoiceService {
 
           // Pre-load the audio
           audio.load();
-          
+
           // Try to play the audio
           audio.play().catch(err => {
             console.error('Error playing audio:', err);
             URL.revokeObjectURL(audioUrl);
+            this.currentAudio = null;
+            this.isSpeaking = false;
             // Try browser speech as fallback
             this.useBrowserSpeech(text, persona)
               .then(resolve)
@@ -134,8 +148,8 @@ export class VoiceService {
         const voices = window.speechSynthesis.getVoices();
         // Simple matching algorithm - could be improved
         const personaLower = persona.toLowerCase();
-        const matchVoice = voices.find(v => 
-          v.name.toLowerCase().includes(personaLower) || 
+        const matchVoice = voices.find(v =>
+          v.name.toLowerCase().includes(personaLower) ||
           (v.lang.startsWith('en') && v.name.includes('Male')) // default for most personas
         );
 
@@ -144,10 +158,44 @@ export class VoiceService {
         }
       }
 
-      utterance.onend = () => resolve();
+      utterance.onend = () => {
+        this.isSpeaking = false;
+        resolve();
+      };
 
+      this.isSpeaking = true;
       window.speechSynthesis.speak(utterance);
     });
+  }
+
+  /**
+   * Stops any ongoing speech synthesis
+   */
+  stopSpeaking(): void {
+    console.log('Stopping speech synthesis');
+    
+    // Stop HTML Audio if playing
+    if (this.currentAudio) {
+      try {
+        this.currentAudio.pause();
+        this.currentAudio.currentTime = 0;
+        this.currentAudio = null;
+      } catch (error) {
+        console.error('Error stopping audio playback:', error);
+      }
+    }
+    
+    // Stop browser speech synthesis if active
+    if (window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (error) {
+        console.error('Error canceling speech synthesis:', error);
+      }
+    }
+    
+    // Reset speaking state
+    this.isSpeaking = false;
   }
 
   startListening(): Promise<void> {

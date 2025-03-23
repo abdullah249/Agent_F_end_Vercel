@@ -15,7 +15,7 @@ export default function Dashboard() {
     let unsubscribe: () => void;
 
     const initializeConnection = () => {
-      console.log("Initializing data connection");
+    //  console.log("Initializing data connection");
       
       // Connect to WebSocket or start polling (handled internally by wsClient)
       wsClient.connect();

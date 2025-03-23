@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Activity, User } from "lucide-react";
+import { Mic, MicOff, Activity, User, Square } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { motion, AnimatePresence } from "framer-motion";
 import { voiceService } from "@/lib/voice-service";
@@ -84,6 +84,7 @@ export default function VoiceInterface() {
   const [selectedPersona, setSelectedPersona] = useState<string | null>(null);
   const [selectedPersonas, setSelectedPersonas] = useState<string[]>([]);
   const [isMultiPersonaMode, setIsMultiPersonaMode] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const recognitionRef = useRef<any>(null);
   const { toast } = useToast();
 
@@ -321,6 +322,38 @@ export default function VoiceInterface() {
     }
   };
 
+  // Function to stop the conversation
+  const stopConversation = () => {
+    conversationManager.stopConversation();
+    
+    // Reset all states to their initial values
+    setIsSpeaking(false);
+    setIsInitializing(false);
+    
+    // If speech recognition is active, stop it
+    if (isListening) {
+      recognitionRef.current?.stop();
+    }
+    
+    toast({
+      title: "Conversation Stopped",
+      description: "The conversation has been interrupted",
+    });
+  };
+
+  // Monitor conversation manager's speaking state
+  useEffect(() => {
+    const checkSpeakingInterval = setInterval(() => {
+      // Update our local state based on the conversation manager's state
+      const conversationSpeaking = conversationManager.isCurrentlySpeaking();
+      if (isSpeaking !== conversationSpeaking) {
+        setIsSpeaking(conversationSpeaking);
+      }
+    }, 200);
+
+    return () => clearInterval(checkSpeakingInterval);
+  }, [isSpeaking]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       if (isListening) {
@@ -404,29 +437,46 @@ export default function VoiceInterface() {
       </Card>
 
       <div className="flex flex-col items-center gap-4">
-        <Button
-          variant={isListening ? "destructive" : "default"}
-          size="lg"
-          className="w-full max-w-md relative bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 disabled:opacity-50"
-          onClick={toggleListening}
-          disabled={isInitializing || (isMultiPersonaMode ? selectedPersonas.length < 2 : !selectedPersona)}
-        >
-          <div className="relative flex items-center justify-center">
-            {isInitializing ? (
-              "Initializing..."
-            ) : isListening ? (
-              <>
-                <MicOff className="mr-2 h-4 w-4" />
-                Stop Listening
-              </>
-            ) : (
-              <>
-                <Mic className="mr-2 h-4 w-4" />
-                Start Listening
-              </>
-            )}
-          </div>
-        </Button>
+        <div className="flex w-full max-w-md gap-2">
+          <Button
+            variant={isListening ? "destructive" : "default"}
+            size="lg"
+            className="flex-1 relative bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 disabled:opacity-50"
+            onClick={toggleListening}
+            disabled={isInitializing || (isMultiPersonaMode ? selectedPersonas.length < 2 : !selectedPersona)}
+          >
+            <div className="relative flex items-center justify-center">
+              {isInitializing ? (
+                "Initializing..."
+              ) : isListening ? (
+                <>
+                  <MicOff className="mr-2 h-4 w-4" />
+                  Stop Listening
+                </>
+              ) : (
+                <>
+                  <Mic className="mr-2 h-4 w-4" />
+                  Start Listening
+                </>
+              )}
+            </div>
+          </Button>
+          
+          {/* Stop Conversation Button - only shown when conversation is in progress */}
+          {isSpeaking && (
+            <Button
+              variant="destructive"
+              size="lg"
+              className="relative"
+              onClick={stopConversation}
+            >
+              <div className="relative flex items-center justify-center">
+                <Square className="mr-2 h-4 w-4" />
+                Stop Conversation
+              </div>
+            </Button>
+          )}
+        </div>
 
         {error && (
           <div className="text-sm text-destructive text-center max-w-md">

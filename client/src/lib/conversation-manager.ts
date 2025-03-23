@@ -33,6 +33,7 @@ export class ConversationManager {
   private isMultiPersonaMode: boolean = false;
   private responseQueue: { text: string, persona: string }[] = [];
   private isProcessingQueue: boolean = false;
+  private stopRequested: boolean = false;
 
   constructor() {
     const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
@@ -41,7 +42,7 @@ export class ConversationManager {
       throw new Error('OpenAI API key is required');
     }
 
-    console.log('Initializing OpenAI client with API key format:', apiKey.substring(0, 10) + '...');
+   // console.log('Initializing OpenAI client with API key format:', apiKey.substring(0, 10) + '...');
 
     this.openai = new OpenAI({
       apiKey,
@@ -107,6 +108,11 @@ export class ConversationManager {
   // Check if in multi-persona mode
   isInMultiPersonaMode(): boolean {
     return this.isMultiPersonaMode;
+  }
+  
+  // Check if currently speaking
+  isCurrentlySpeaking(): boolean {
+    return this.isSpeaking;
   }
 
   async startConversation(): Promise<void> {
@@ -394,6 +400,7 @@ export class ConversationManager {
             persona: currentSpeaker
           });
 
+
           this.context.lastResponse = aiResponse;
           this.isSpeaking = true;
 
@@ -544,15 +551,22 @@ export class ConversationManager {
     
     this.isProcessingQueue = true;
     this.isSpeaking = true;
+    this.stopRequested = false;
     
     try {
       for (const response of this.responseQueue) {
+        // Check if stop was requested
+        if (this.stopRequested) {
+          console.log('Conversation stop requested, stopping queue processing');
+          break;
+        }
+        
         console.log(`Speaking as ${response.persona}: "${response.text.substring(0, 30)}..."`);
         
         try {
           await this.speak(response.text, response.persona);
-          // Add a small pause between speakers
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Reduced pause between speakers for more natural conversation flow
+          await new Promise(resolve => setTimeout(resolve, 50)); // Reduced from 500ms to 50ms
         } catch (error) {
           console.error(`Error speaking as ${response.persona}:`, error);
         }
@@ -561,7 +575,29 @@ export class ConversationManager {
       this.isProcessingQueue = false;
       this.isSpeaking = false;
       this.responseQueue = [];
+      this.stopRequested = false;
     }
+  }
+  
+  /**
+   * Stops the current conversation
+   * This can be called at any time to interrupt ongoing speech
+   */
+  stopConversation(): void {
+    console.log('Stopping conversation');
+    
+    // Set the stop flag
+    this.stopRequested = true;
+    
+    // Stop any ongoing speech
+    voiceService.stopSpeaking();
+    
+    // Clear the queue
+    this.responseQueue = [];
+    
+    // Reset speaking states
+    this.isSpeaking = false;
+    this.isProcessingQueue = false;
   }
 
   private async speak(text: string, persona?: string): Promise<void> {
