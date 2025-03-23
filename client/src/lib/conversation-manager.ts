@@ -42,7 +42,6 @@ export class ConversationManager {
       throw new Error('OpenAI API key is required');
     }
 
-   // console.log('Initializing OpenAI client with API key format:', apiKey.substring(0, 10) + '...');
 
     this.openai = new OpenAI({
       apiKey,
@@ -109,7 +108,7 @@ export class ConversationManager {
   isInMultiPersonaMode(): boolean {
     return this.isMultiPersonaMode;
   }
-  
+
   // Check if currently speaking
   isCurrentlySpeaking(): boolean {
     return this.isSpeaking;
@@ -276,119 +275,29 @@ export class ConversationManager {
       try {
         console.log('Using OpenAI to generate response...');
 
-        let aiResponse: string;
-
-        try {
-          console.log('Using proxy endpoint for OpenAI request');
-          const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-
-          // First try with gpt-4o
-          try {
-            console.log('Attempting with gpt-4o model');
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-              },
-              body: JSON.stringify({
-                model: "gpt-4o",
-                messages: this.context.messages,
-                temperature: 0.7, // Lower temperature for more focused responses
-                max_tokens: this.isMultiPersonaMode ? 800 : 80, // Reduced token limits for faster responses
-                presence_penalty: 0.5,
-                frequency_penalty: 0.5
-              })
-            });
-
-            // Check for quota exceeded error
-            if (response.status === 429) {
-              const errorData = await response.json();
-              if (errorData.error && errorData.error.type === "insufficient_quota") {
-                console.warn('OpenAI quota exceeded, falling back to gpt-3.5-turbo');
-                throw new Error('quota_exceeded');
-              }
-            }
-
-            if (!response.ok) {
-              const errorText = await response.text();
-              throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`);
-            }
-
-            const data = await response.json();
-            const content = data.choices[0]?.message?.content;
-
-            if (!content) {
-              throw new Error("No response received from AI");
-            }
-
-            aiResponse = content;
-          } catch (modelError: any) {
-            if (modelError.message === 'quota_exceeded' ||
-              (modelError.message && modelError.message.includes('quota'))) {
-              console.log('Falling back to gpt-3.5-turbo due to quota limits');
-
-              const fallbackResponse = await fetch('/api/openai/chat/completions', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${apiKey}`
-                },
-                body: JSON.stringify({
-                  model: "gpt-3.5-turbo",
-                  messages: this.context.messages,
-                  temperature: 0.7, // Lower temperature for more focused responses
-                  max_tokens: this.isMultiPersonaMode ? 800 : 80, // Reduced token limits for faster responses
-                  presence_penalty: 0.5,
-                  frequency_penalty: 0.5
-                })
-              });
-
-              if (!fallbackResponse.ok) {
-                const errorText = await fallbackResponse.text();
-                throw new Error(`OpenAI API error with fallback model: ${fallbackResponse.status} - ${errorText}`);
-              }
-
-              const data = await fallbackResponse.json();
-              const content = data.choices[0]?.message?.content;
-
-              if (!content) {
-                throw new Error("No response received from AI with fallback model");
-              }
-
-              aiResponse = content;
-            } else {
-              // If it's not a quota error, rethrow
-              throw modelError;
-            }
-          }
-        } catch (proxyError) {
-          console.error('Proxy endpoint failed, falling back to direct OpenAI SDK:', proxyError);
-          try {
-            const response = await this.openai.chat.completions.create({
-              model: "gpt-3.5-turbo",
-              messages: this.context.messages,
-              temperature: 0.7, // Lower temperature for more focused responses
-              max_tokens: this.isMultiPersonaMode ? 800 : 80, // Reduced token limits for faster responses
-              presence_penalty: 0.5,
-              frequency_penalty: 0.5
-            });
-
-            const content = response.choices[0]?.message?.content;
-            if (!content) {
-              throw new Error("No response received from AI");
-            }
-
-            aiResponse = content;
-          } catch (sdkError) {
-            console.error('OpenAI SDK also failed:', sdkError);
-            throw sdkError;
-          }
-        }
-
         // Set speaking state early to show the stop button immediately
         this.isSpeaking = true;
+
         
+        const model = "gpt-3.5-turbo";
+
+        console.log(`Using ${model} model directly`);
+        const response = await this.openai.chat.completions.create({
+          model: model,
+          messages: this.context.messages,
+          temperature: 0.7,
+          max_tokens: this.isMultiPersonaMode ? 800 : 80,
+          presence_penalty: 0.5,
+          frequency_penalty: 0.5
+        });
+
+        const content = response.choices[0]?.message?.content;
+        if (!content) {
+          throw new Error("No response received from AI");
+        }
+
+        const aiResponse = content;
+
         if (this.isMultiPersonaMode) {
           // Process multi-persona response
           await this.processMultiPersonaResponse(aiResponse);
@@ -459,22 +368,22 @@ export class ConversationManager {
   // Process a multi-persona response by parsing it and adding to the queue
   private async processMultiPersonaResponse(response: string): Promise<void> {
     console.log('Processing multi-persona response:', response);
-    
+
     // Set speaking state early to show the stop button immediately
     this.isSpeaking = true;
-    
+
     // Clear the existing queue
     this.responseQueue = [];
-    
+
     // Parse the response to extract persona-specific responses
     const lines = response.split('\n');
     let currentPersona: string | null = null;
     let currentText = '';
-    
+
     for (const line of lines) {
       // Check if this line starts a new persona's response
       const personaMatch = line.match(/^([A-Za-z\s\.]+):/);
-      
+
       if (personaMatch) {
         // If we were already building a response, add it to the queue
         if (currentPersona && currentText.trim()) {
@@ -483,7 +392,7 @@ export class ConversationManager {
             text: currentText.trim()
           });
         }
-        
+
         // Start a new response
         currentPersona = this.findMatchingPersona(personaMatch[1].trim());
         currentText = line.substring(personaMatch[0].length).trim();
@@ -492,7 +401,7 @@ export class ConversationManager {
         currentText += ' ' + line.trim();
       }
     }
-    
+
     // Add the final response to the queue
     if (currentPersona && currentText.trim()) {
       this.responseQueue.push({
@@ -500,11 +409,11 @@ export class ConversationManager {
         text: currentText.trim()
       });
     }
-    
+
     // If no valid responses were parsed, create a fallback
     if (this.responseQueue.length === 0) {
       console.warn('Failed to parse multi-persona response, using fallback');
-      
+
       // Use the first selected persona as fallback
       const fallbackPersona = this.selectedPersonas[0];
       this.responseQueue.push({
@@ -512,54 +421,54 @@ export class ConversationManager {
         text: response
       });
     }
-    
-    // Add all responses to the conversation context
+
+    // Add all responses to the conversation context immediately
     const fullResponse = this.responseQueue.map(r => `${r.persona}: ${r.text}`).join('\n\n');
     this.context.messages.push({
       role: "assistant",
       content: fullResponse
     });
-    
+
     this.context.lastResponse = fullResponse;
-    
+
     // Start processing the queue immediately without waiting
     this.processResponseQueue();
-    
+
     // Return immediately to make the UI responsive
     return Promise.resolve();
   }
-  
+
   // Find the matching persona name from the available personas
   private findMatchingPersona(name: string): string {
     // Try to find an exact match
-    const exactMatch = this.selectedPersonas.find(p => 
+    const exactMatch = this.selectedPersonas.find(p =>
       p.toLowerCase() === name.toLowerCase()
     );
-    
+
     if (exactMatch) return exactMatch;
-    
+
     // Try to find a partial match
-    const partialMatch = this.selectedPersonas.find(p => 
-      name.toLowerCase().includes(p.toLowerCase()) || 
+    const partialMatch = this.selectedPersonas.find(p =>
+      name.toLowerCase().includes(p.toLowerCase()) ||
       p.toLowerCase().includes(name.toLowerCase())
     );
-    
+
     if (partialMatch) return partialMatch;
-    
+
     // If no match found, return the name as is
     return name;
   }
-  
+
   // Process the response queue sequentially
   private async processResponseQueue(): Promise<void> {
     if (this.isProcessingQueue || this.responseQueue.length === 0) {
       return;
     }
-    
+
     this.isProcessingQueue = true;
     this.isSpeaking = true;
     this.stopRequested = false;
-    
+
     try {
       for (const response of this.responseQueue) {
         // Check if stop was requested
@@ -567,9 +476,9 @@ export class ConversationManager {
           console.log('Conversation stop requested, stopping queue processing');
           break;
         }
-        
+
         console.log(`Speaking as ${response.persona}: "${response.text.substring(0, 30)}..."`);
-        
+
         try {
           await this.speak(response.text, response.persona);
           // Reduced pause between speakers for more natural conversation flow
@@ -585,28 +494,28 @@ export class ConversationManager {
       this.stopRequested = false;
     }
   }
-  
+
   /**
    * Stops the current conversation
    * This can be called at any time to interrupt ongoing speech
    */
   stopConversation(): void {
     console.log('Stopping conversation');
-    
+
     // Set the stop flag
     this.stopRequested = true;
-    
+
     // Stop any ongoing speech
     voiceService.stopSpeaking();
-    
+
     // Clear the queue
     this.responseQueue = [];
-    
+
     // Reset all states
     this.isSpeaking = false;
     this.isProcessingQueue = false;
     this.isInitialized = false; // Reset initialization state to allow starting a new conversation
-    
+
     // Reset conversation context
     this.context.messages = this.context.messages.slice(0, 1); // Keep only the system message
     this.context.turnCount = 0;
@@ -643,8 +552,8 @@ export class ConversationManager {
         throw new Error("No conversation to save");
       }
 
-      const participants = this.isMultiPersonaMode 
-        ? this.selectedPersonas 
+      const participants = this.isMultiPersonaMode
+        ? this.selectedPersonas
         : [this.selectedPersonas[0] || 'AI Assistant'];
 
       const title = this.isMultiPersonaMode
