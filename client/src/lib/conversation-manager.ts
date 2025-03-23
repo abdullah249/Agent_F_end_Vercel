@@ -294,9 +294,9 @@ export class ConversationManager {
               body: JSON.stringify({
                 model: "gpt-4o",
                 messages: this.context.messages,
-                temperature: 0.85,
-                max_tokens: this.isMultiPersonaMode ? 2000 : 120, // Significantly increased token limit for multi-persona mode
-                presence_penalty: 0.7,
+                temperature: 0.7, // Lower temperature for more focused responses
+                max_tokens: this.isMultiPersonaMode ? 800 : 80, // Reduced token limits for faster responses
+                presence_penalty: 0.5,
                 frequency_penalty: 0.5
               })
             });
@@ -337,9 +337,9 @@ export class ConversationManager {
                 body: JSON.stringify({
                   model: "gpt-3.5-turbo",
                   messages: this.context.messages,
-                  temperature: 0.85,
-                  max_tokens: this.isMultiPersonaMode ? 2000 : 120, // Significantly increased token limit for multi-persona mode
-                  presence_penalty: 0.7,
+                  temperature: 0.7, // Lower temperature for more focused responses
+                  max_tokens: this.isMultiPersonaMode ? 800 : 80, // Reduced token limits for faster responses
+                  presence_penalty: 0.5,
                   frequency_penalty: 0.5
                 })
               });
@@ -368,9 +368,9 @@ export class ConversationManager {
             const response = await this.openai.chat.completions.create({
               model: "gpt-3.5-turbo",
               messages: this.context.messages,
-              temperature: 0.85,
-              max_tokens: this.isMultiPersonaMode ? 2000 : 120, // Significantly increased token limit for multi-persona mode
-              presence_penalty: 0.7,
+              temperature: 0.7, // Lower temperature for more focused responses
+              max_tokens: this.isMultiPersonaMode ? 800 : 80, // Reduced token limits for faster responses
+              presence_penalty: 0.5,
               frequency_penalty: 0.5
             });
 
@@ -386,6 +386,9 @@ export class ConversationManager {
           }
         }
 
+        // Set speaking state early to show the stop button immediately
+        this.isSpeaking = true;
+        
         if (this.isMultiPersonaMode) {
           // Process multi-persona response
           await this.processMultiPersonaResponse(aiResponse);
@@ -400,9 +403,7 @@ export class ConversationManager {
             persona: currentSpeaker
           });
 
-
           this.context.lastResponse = aiResponse;
-          this.isSpeaking = true;
 
           try {
             await this.speak(aiResponse, currentSpeaker);
@@ -458,6 +459,9 @@ export class ConversationManager {
   // Process a multi-persona response by parsing it and adding to the queue
   private async processMultiPersonaResponse(response: string): Promise<void> {
     console.log('Processing multi-persona response:', response);
+    
+    // Set speaking state early to show the stop button immediately
+    this.isSpeaking = true;
     
     // Clear the existing queue
     this.responseQueue = [];
@@ -518,8 +522,11 @@ export class ConversationManager {
     
     this.context.lastResponse = fullResponse;
     
-    // Process the queue
-    await this.processResponseQueue();
+    // Start processing the queue immediately without waiting
+    this.processResponseQueue();
+    
+    // Return immediately to make the UI responsive
+    return Promise.resolve();
   }
   
   // Find the matching persona name from the available personas
@@ -595,9 +602,14 @@ export class ConversationManager {
     // Clear the queue
     this.responseQueue = [];
     
-    // Reset speaking states
+    // Reset all states
     this.isSpeaking = false;
     this.isProcessingQueue = false;
+    this.isInitialized = false; // Reset initialization state to allow starting a new conversation
+    
+    // Reset conversation context
+    this.context.messages = this.context.messages.slice(0, 1); // Keep only the system message
+    this.context.turnCount = 0;
   }
 
   private async speak(text: string, persona?: string): Promise<void> {
