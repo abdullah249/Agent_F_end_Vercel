@@ -186,8 +186,11 @@ export class ConversationManager {
     1. Choose ONE persona to speak next
     2. Format your response as: "PERSONA_NAME: [their response]"
     3. Make sure each persona speaks in their authentic voice and perspective
-    4. Allow each persona to fully express their thoughts and ideas
-    5. Ensure a natural back-and-forth between the personas
+    4. Ensure a natural back-and-forth between the personas
+    5. Generate 6-10 exchanges between personas for a rich conversation
+    
+    IMPORTANT: This is a real-time conversation. The first persona's response should be concise (1-3 sentences) 
+    to start speaking quickly, but subsequent responses can be more detailed.
     
     The user will provide topics or questions to guide the conversation.
     
@@ -279,14 +282,16 @@ export class ConversationManager {
         this.isSpeaking = true;
 
         
+        // Use a higher token limit for longer conversations while maintaining immediate response
         const model = "gpt-3.5-turbo";
+        const maxTokens = this.isMultiPersonaMode ? 3000 : 300;
 
-        console.log(`Using ${model} model directly`);
+        console.log(`Using ${model} model directly with max_tokens=${maxTokens}`);
         const response = await this.openai.chat.completions.create({
           model: model,
           messages: this.context.messages,
           temperature: 0.7,
-          max_tokens: this.isMultiPersonaMode ? 800 : 80,
+          max_tokens: maxTokens, // Increased for longer conversations
           presence_penalty: 0.5,
           frequency_penalty: 0.5
         });
@@ -379,6 +384,7 @@ export class ConversationManager {
     const lines = response.split('\n');
     let currentPersona: string | null = null;
     let currentText = '';
+    let firstPersonaResponse = null;
 
     for (const line of lines) {
       // Check if this line starts a new persona's response
@@ -387,10 +393,17 @@ export class ConversationManager {
       if (personaMatch) {
         // If we were already building a response, add it to the queue
         if (currentPersona && currentText.trim()) {
-          this.responseQueue.push({
+          const responseItem = {
             persona: currentPersona,
             text: currentText.trim()
-          });
+          };
+          
+          this.responseQueue.push(responseItem);
+          
+          // Save the first persona response to start speaking immediately
+          if (firstPersonaResponse === null) {
+            firstPersonaResponse = responseItem;
+          }
         }
 
         // Start a new response
@@ -404,10 +417,17 @@ export class ConversationManager {
 
     // Add the final response to the queue
     if (currentPersona && currentText.trim()) {
-      this.responseQueue.push({
+      const responseItem = {
         persona: currentPersona,
         text: currentText.trim()
-      });
+      };
+      
+      this.responseQueue.push(responseItem);
+      
+      // Save the first persona response if this is the only one
+      if (firstPersonaResponse === null) {
+        firstPersonaResponse = responseItem;
+      }
     }
 
     // If no valid responses were parsed, create a fallback
@@ -416,10 +436,13 @@ export class ConversationManager {
 
       // Use the first selected persona as fallback
       const fallbackPersona = this.selectedPersonas[0];
-      this.responseQueue.push({
+      const responseItem = {
         persona: fallbackPersona,
         text: response
-      });
+      };
+      
+      this.responseQueue.push(responseItem);
+      firstPersonaResponse = responseItem;
     }
 
     // Add all responses to the conversation context immediately
@@ -431,8 +454,32 @@ export class ConversationManager {
 
     this.context.lastResponse = fullResponse;
 
-    // Start processing the queue immediately without waiting
-    this.processResponseQueue();
+    // Start speaking the first persona's response immediately
+    if (firstPersonaResponse) {
+      console.log(`Speaking immediately as ${firstPersonaResponse.persona}: "${firstPersonaResponse.text.substring(0, 30)}..."`);
+      
+      // Remove the first response from the queue since we're handling it separately
+      this.responseQueue.shift();
+      
+      // Start speaking the first response immediately
+      this.speak(firstPersonaResponse.text, firstPersonaResponse.persona)
+        .then(() => {
+          // Only continue with the queue if not stopped
+          if (!this.stopRequested) {
+            this.processResponseQueue();
+          }
+        })
+        .catch(error => {
+          console.error(`Error speaking as ${firstPersonaResponse?.persona}:`, error);
+          // Continue with the queue even if there was an error
+          if (!this.stopRequested) {
+            this.processResponseQueue();
+          }
+        });
+    } else {
+      // If no first response (shouldn't happen), just process the queue
+      this.processResponseQueue();
+    }
 
     // Return immediately to make the UI responsive
     return Promise.resolve();
