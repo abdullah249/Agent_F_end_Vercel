@@ -177,14 +177,15 @@ export class ConversationManager {
 
     return `You are facilitating a conversation between ${personasList} about innovation, creativity, and design thinking.
     
-    For each response, you should:
+    For each response, you MUST:
     1. Choose ONE persona to speak next
     2. Format your response as: "PERSONA_NAME: [their response]"
     3. Make sure each persona speaks in their authentic voice and perspective
     4. Ensure a natural back-and-forth between the personas
-    5. Generate 6-10 exchanges between personas for a rich conversation
+    5. ALWAYS generate EXACTLY 6-10 exchanges between personas (6-10 personas speaking, one after the other)
+       This is CRITICAL - you MUST include at least 6 exchanges, with different personas taking turns.
     
-    IMPORTANT: This is a real-time conversation. The first persona's response should be (4-5 sentences) 
+    IMPORTANT: This is a real-time conversation. The first persona's response should be concise (1-3 sentences) 
     to start speaking quickly, but subsequent responses can be more detailed.
     
     The user will provide topics or questions to guide the conversation.
@@ -524,7 +525,7 @@ export class ConversationManager {
         try {
           await this.speak(response.text, response.persona);
           // Reduced pause between speakers for more natural conversation flow
-          await new Promise(resolve => setTimeout(resolve, 50)); // Reduced from 500ms to 50ms
+        //  await new Promise(resolve => setTimeout(resolve, 50)); // Reduced from 500ms to 50ms
         } catch (error) {
           console.error(`Error speaking as ${response.persona}:`, error);
         }

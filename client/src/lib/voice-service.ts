@@ -136,7 +136,10 @@ export class VoiceService {
   }
 
   async synthesizeSpeech({ text, persona }: { text: string; persona?: string }): Promise<void> {
-    return this.speak(text, persona);
+    // Skip server-side synthesis entirely and use browser speech directly
+    // This eliminates the long pauses between personas speaking
+    console.log(`Using direct browser speech for ${persona || 'default'} to reduce delay`);
+    return this.useBrowserSpeech(text, persona);
   }
 
   private async useBrowserSpeech(text: string, persona?: string): Promise<void> {
