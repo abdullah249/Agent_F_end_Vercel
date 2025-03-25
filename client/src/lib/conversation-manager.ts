@@ -161,13 +161,8 @@ export class ConversationManager {
         console.warn('Failed to initialize audio, continuing without audio initialization:', error);
       }
 
-      // If in multi-persona mode, automatically start the conversation
-      if (this.isMultiPersonaMode && this.selectedPersonas.length >= 2) {
-        console.log('Auto-starting multi-persona conversation');
-        const initialPrompt = "Let's have an interesting discussion about innovation, creativity, and the future of technology.";
-        await this.handleUserInput(initialPrompt);
-      }
-      // Otherwise, wait for user input in single-persona mode
+      // Wait for user input in both single and multi-persona modes
+      console.log('Conversation initialized, waiting for user input');
     } catch (error) {
       console.error('Failed to start conversation:', error);
       this.isInitialized = false;
@@ -189,7 +184,7 @@ export class ConversationManager {
     4. Ensure a natural back-and-forth between the personas
     5. Generate 6-10 exchanges between personas for a rich conversation
     
-    IMPORTANT: This is a real-time conversation. The first persona's response should be concise (1-3 sentences) 
+    IMPORTANT: This is a real-time conversation. The first persona's response should be (4-5 sentences) 
     to start speaking quickly, but subsequent responses can be more detailed.
     
     The user will provide topics or questions to guide the conversation.

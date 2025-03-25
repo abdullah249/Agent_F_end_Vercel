@@ -329,6 +329,7 @@ export default function VoiceInterface() {
     // Reset all states to their initial values
     setIsSpeaking(false);
     setIsInitializing(false);
+    setSelectedPersonas([' '])
     
     // If speech recognition is active, stop it
     if (isListening) {
@@ -437,33 +438,66 @@ export default function VoiceInterface() {
       </Card>
 
       <div className="flex flex-col items-center gap-4">
-        <div className="flex w-full max-w-md gap-2">
-          <Button
-            variant={isListening ? "destructive" : "default"}
-            size="lg"
-            className="flex-1 relative bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 disabled:opacity-50"
-            onClick={toggleListening}
-            disabled={isInitializing || (isMultiPersonaMode ? selectedPersonas.length < 2 : !selectedPersona)}
-          >
-            <div className="relative flex items-center justify-center">
-              {isInitializing ? (
-                "Initializing..."
-              ) : isListening ? (
-                <>
-                  <MicOff className="mr-2 h-4 w-4" />
-                  Stop Listening
-                </>
-              ) : (
-                <>
-                  <Mic className="mr-2 h-4 w-4" />
-                  Start Listening
-                </>
+        {/* Text input for conversation topic */}
+        <div className="w-full max-w-md">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="conversation-topic">What should they talk about?</Label>
+            <div className="flex gap-2">
+              <input
+                id="conversation-topic"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="Enter a topic or question..."
+                value={transcript}
+                onChange={(e) => setTranscript(e.target.value)}
+                disabled={isSpeaking || isListening}
+              />
+              {isMultiPersonaMode && (
+                <Button
+                  variant="default"
+                  size="default"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  onClick={() => handleFinalTranscript(transcript)}
+                  disabled={!transcript.trim() || isSpeaking || isInitializing || selectedPersonas.length < 2}
+                >
+                  Start
+                </Button>
               )}
             </div>
-          </Button>
-          
-          {/* Stop Conversation Button - only shown when conversation is in progress */}
-          {isSpeaking && (
+          </div>
+        </div>
+
+        {/* Only show microphone button in single-persona mode */}
+        {!isMultiPersonaMode && (
+          <div className="flex w-full max-w-md gap-2">
+            <Button
+              variant={isListening ? "destructive" : "default"}
+              size="lg"
+              className="flex-1 relative bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 disabled:opacity-50"
+              onClick={toggleListening}
+              disabled={isInitializing || !selectedPersona}
+            >
+              <div className="relative flex items-center justify-center">
+                {isInitializing ? (
+                  "Initializing..."
+                ) : isListening ? (
+                  <>
+                    <MicOff className="mr-2 h-4 w-4" />
+                    Stop Listening
+                  </>
+                ) : (
+                  <>
+                    <Mic className="mr-2 h-4 w-4" />
+                    Start Listening
+                  </>
+                )}
+              </div>
+            </Button>
+          </div>
+        )}
+        
+        {/* Stop Conversation Button - only shown when conversation is in progress */}
+        {isSpeaking && (
+          <div className="flex w-full max-w-md justify-center">
             <Button
               variant="destructive"
               size="lg"
@@ -475,8 +509,8 @@ export default function VoiceInterface() {
                 Stop Conversation
               </div>
             </Button>
-          )}
-        </div>
+          </div>
+        )}
 
         {error && (
           <div className="text-sm text-destructive text-center max-w-md">
@@ -484,36 +518,39 @@ export default function VoiceInterface() {
           </div>
         )}
 
-        <AnimatePresence>
-          {isListening && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="w-full max-w-md space-y-2"
-            >
-              <div className="relative h-8">
-                <Progress value={progress} className="h-2" />
-                {transcript && (
-                  <div className="text-sm text-muted-foreground text-center mt-2">
-                    {transcript}
-                  </div>
-                )}
-              </div>
-              <div className="flex justify-center">
-                <motion.div
-                  animate={{
-                    scale: [1, 1.2, 1],
-                    opacity: [0.5, 1, 0.5],
-                  }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                >
-                  <Activity className="h-5 w-5 text-primary animate-pulse" />
-                </motion.div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Only show progress bar and speech recognition animation in single-persona mode */}
+        {!isMultiPersonaMode && (
+          <AnimatePresence>
+            {isListening && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="w-full max-w-md space-y-2"
+              >
+                <div className="relative h-8">
+                  <Progress value={progress} className="h-2" />
+                  {transcript && (
+                    <div className="text-sm text-muted-foreground text-center mt-2">
+                      {transcript}
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-center">
+                  <motion.div
+                    animate={{
+                      scale: [1, 1.2, 1],
+                      opacity: [0.5, 1, 0.5],
+                    }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    <Activity className="h-5 w-5 text-primary animate-pulse" />
+                  </motion.div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        )}
       </div>
 
       <div className="w-full space-y-4">
