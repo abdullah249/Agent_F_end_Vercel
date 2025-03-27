@@ -85,6 +85,7 @@ export default function VoiceInterface() {
   const [selectedPersonas, setSelectedPersonas] = useState<string[]>([]);
   const [isMultiPersonaMode, setIsMultiPersonaMode] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [useMicInMultiMode, setUseMicInMultiMode] = useState(false);
   const recognitionRef = useRef<any>(null);
   const { toast } = useToast();
 
@@ -413,68 +414,86 @@ export default function VoiceInterface() {
 
           {/* Multiple Persona Selection (when in multi-persona mode) */}
           {isMultiPersonaMode && (
-            <div className="space-y-2">
-              <Label>Select personas for the conversation</Label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {digitalTwins.map((twin) => (
-                  <div key={twin.id} className="flex items-center space-x-2">
-                    <Checkbox 
-                      id={twin.id} 
-                      checked={selectedPersonas.includes(twin.name)}
-                      onCheckedChange={(checked) => handlePersonaCheckboxChange(twin.name, checked === true)}
-                    />
-                    <Label htmlFor={twin.id} className="cursor-pointer">
-                      {twin.name}
-                    </Label>
-                  </div>
-                ))}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Select personas for the conversation</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {digitalTwins.map((twin) => (
+                    <div key={twin.id} className="flex items-center space-x-2">
+                      <Checkbox 
+                        id={twin.id} 
+                        checked={selectedPersonas.includes(twin.name)}
+                        onCheckedChange={(checked) => handlePersonaCheckboxChange(twin.name, checked === true)}
+                      />
+                      <Label htmlFor={twin.id} className="cursor-pointer">
+                        {twin.name}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+                {selectedPersonas.length < 2 && isMultiPersonaMode && (
+                  <p className="text-sm text-destructive">Please select at least 2 personas</p>
+                )}
               </div>
-              {selectedPersonas.length < 2 && isMultiPersonaMode && (
-                <p className="text-sm text-destructive">Please select at least 2 personas</p>
-              )}
+              
+              {/* Input Method Toggle for Multi-Persona Mode */}
+              <div className="flex items-center justify-between pt-2 border-t border-border">
+                <Label htmlFor="input-method">Input Method</Label>
+                <div className="flex items-center space-x-2">
+                  <Label htmlFor="input-method" className={!useMicInMultiMode ? "font-bold" : ""}>Text</Label>
+                  <Switch 
+                    id="input-method" 
+                    checked={useMicInMultiMode}
+                    onCheckedChange={setUseMicInMultiMode}
+                  />
+                  <Label htmlFor="input-method" className={useMicInMultiMode ? "font-bold" : ""}>Microphone</Label>
+                </div>
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
 
       <div className="flex flex-col items-center gap-4">
-        {/* Text input for conversation topic */}
-        <div className="w-full max-w-md">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="conversation-topic">What should they talk about?</Label>
-            <div className="flex gap-2">
-              <input
-                id="conversation-topic"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="Enter a topic or question..."
-                value={transcript}
-                onChange={(e) => setTranscript(e.target.value)}
-                disabled={isSpeaking || isListening}
-              />
-              {isMultiPersonaMode && (
-                <Button
-                  variant="default"
-                  size="default"
-                  className="bg-primary text-primary-foreground hover:bg-primary/90"
-                  onClick={() => handleFinalTranscript(transcript)}
-                  disabled={!transcript.trim() || isSpeaking || isInitializing || selectedPersonas.length < 2}
-                >
-                  Start
-                </Button>
-              )}
+        {/* Text input for conversation topic - only shown when not using microphone in multi-persona mode */}
+        {(!isMultiPersonaMode || (isMultiPersonaMode && !useMicInMultiMode)) && (
+          <div className="w-full max-w-md">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="conversation-topic">What should they talk about?</Label>
+              <div className="flex gap-2">
+                <input
+                  id="conversation-topic"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  placeholder="Enter a topic or question..."
+                  value={transcript}
+                  onChange={(e) => setTranscript(e.target.value)}
+                  disabled={isSpeaking || isListening}
+                />
+                {isMultiPersonaMode && (
+                  <Button
+                    variant="default"
+                    size="default"
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    onClick={() => handleFinalTranscript(transcript)}
+                    disabled={!transcript.trim() || isSpeaking || isInitializing || selectedPersonas.length < 2}
+                  >
+                    Start
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Only show microphone button in single-persona mode */}
-        {!isMultiPersonaMode && (
+        {/* Show microphone button in single-persona mode or when microphone is selected in multi-persona mode */}
+        {(!isMultiPersonaMode || (isMultiPersonaMode && useMicInMultiMode)) && (
           <div className="flex w-full max-w-md gap-2">
             <Button
               variant={isListening ? "destructive" : "default"}
               size="lg"
               className="flex-1 relative bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 disabled:opacity-50"
               onClick={toggleListening}
-              disabled={isInitializing || !selectedPersona}
+              disabled={isInitializing || (!isMultiPersonaMode && !selectedPersona) || (isMultiPersonaMode && selectedPersonas.length < 2)}
             >
               <div className="relative flex items-center justify-center">
                 {isInitializing ? (
@@ -518,39 +537,37 @@ export default function VoiceInterface() {
           </div>
         )}
 
-        {/* Only show progress bar and speech recognition animation in single-persona mode */}
-        {!isMultiPersonaMode && (
-          <AnimatePresence>
-            {isListening && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="w-full max-w-md space-y-2"
-              >
-                <div className="relative h-8">
-                  <Progress value={progress} className="h-2" />
-                  {transcript && (
-                    <div className="text-sm text-muted-foreground text-center mt-2">
-                      {transcript}
-                    </div>
-                  )}
-                </div>
-                <div className="flex justify-center">
-                  <motion.div
-                    animate={{
-                      scale: [1, 1.2, 1],
-                      opacity: [0.5, 1, 0.5],
-                    }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
-                  >
-                    <Activity className="h-5 w-5 text-primary animate-pulse" />
-                  </motion.div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        )}
+        {/* Show progress bar and speech recognition animation when listening in any mode */}
+        <AnimatePresence>
+          {isListening && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="w-full max-w-md space-y-2"
+            >
+              <div className="relative h-8">
+                <Progress value={progress} className="h-2" />
+                {transcript && (
+                  <div className="text-sm text-muted-foreground text-center mt-2">
+                    {transcript}
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-center">
+                <motion.div
+                  animate={{
+                    scale: [1, 1.2, 1],
+                    opacity: [0.5, 1, 0.5],
+                  }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                >
+                  <Activity className="h-5 w-5 text-primary animate-pulse" />
+                </motion.div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <div className="w-full space-y-4">
