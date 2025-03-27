@@ -182,10 +182,10 @@ export class ConversationManager {
     2. Format your response as: "PERSONA_NAME: [their response]"
     3. Make sure each persona speaks in their authentic voice and perspective
     4. Ensure a natural back-and-forth between the personas
-    5. ALWAYS generate EXACTLY 6-10 exchanges between personas (6-10 personas speaking, one after the other)
-       This is CRITICAL - you MUST include at least 6 exchanges, with different personas taking turns.
+    5. ALWAYS generate EXACTLY 15-20 exchanges between personas (6-10 personas speaking, one after the other)
+       This is CRITICAL - you MUST include at least 15 exchanges, with different personas taking turns.
     
-    IMPORTANT: This is a real-time conversation. The first persona's response should be concise (1-3 sentences) 
+    IMPORTANT: This is a real-time conversation. The first persona's response should be concise (3-4 sentences) 
     to start speaking quickly, but subsequent responses can be more detailed.
     
     The user will provide topics or questions to guide the conversation.
