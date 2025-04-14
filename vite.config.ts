@@ -25,14 +25,14 @@ export default defineConfig({
     port: 3001, // Client will run on port 3001
     proxy: {
       '/api': {
-        target: 'http://ec2-13-60-196-19.eu-north-1.compute.amazonaws.com:3000', // API server on EC2
-        //target: '127.0.0.1:3000',
+        // target: 'http://ec2-13-60-196-19.eu-north-1.compute.amazonaws.com:3000', // API server on EC2
+        target: '127.0.0.1:3000',
         changeOrigin: true,
         secure: false,
       },
       '/ws': {
-        target: 'ws://ec2-13-60-196-19.eu-north-1.compute.amazonaws.com:3000',
-      //target: 'ws://127.0.0.1:3000/',
+        // target: 'ws://ec2-13-60-196-19.eu-north-1.compute.amazonaws.com:3000',
+      target: 'ws://127.0.0.1:3000/',
         ws: true,
       }
     }

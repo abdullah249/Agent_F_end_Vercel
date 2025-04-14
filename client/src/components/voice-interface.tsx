@@ -371,7 +371,7 @@ export default function VoiceInterface() {
     <div className="w-full min-h-[200px] flex flex-col gap-6 p-6">
       {/* Conversation Mode and Persona Selection */}
       <Card className="w-full bg-gradient-to-br from-background to-primary/5">
-        <CardHeader className="flex flex-row items-center gap-2">
+        <CardHeader className="flex flex-row items-center gap-2"> auto-trading system for silver futures using a programming language like Python.
           <User className="h-5 w-5 text-primary" />
           <h3 className="text-lg font-semibold">Conversation Setup</h3>
         </CardHeader>
