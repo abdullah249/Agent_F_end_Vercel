@@ -1,3 +1,4 @@
+
 import { voiceService } from './voice-service';
 import OpenAI from "openai";
 
@@ -36,7 +37,8 @@ export class ConversationManager {
   private stopRequested: boolean = false;
 
   constructor() {
-    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    const OPENAI_API_KEY="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";
+    const apiKey = OPENAI_API_KEY;
     if (!apiKey) {
       console.error('OpenAI API key not found');
       throw new Error('OpenAI API key is required');
