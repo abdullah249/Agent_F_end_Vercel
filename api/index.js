@@ -2,7 +2,7 @@ import express from 'express';
 import fetch from 'node-fetch';
 
 const app = express();
-const API_BASE_URL = 'https://agent-backend-typescript.onrender.com/api';
+const API_BASE_URL = 'https://agent-backend-typescript.onrender.com';
 //const API_BASE_URL = 'http://localhost:3000/api';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1';
